@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fitz Labs AI Video Generator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --ink:#070A11; --panel:#0E131F; --raise:#161D2E; --line:#222C44; --line2:#31406180;
+  --text:#E8EDF8; --mute:#8794B0;
+  --create:#4FE3C9; --edit:#FFA24A; --video:#A98BFF; --sound:#FF5C8D; --lib:#7FA8FF;
+  --acc:var(--create);
+  --display:"Chakra Petch","Avenir Next Condensed","Trebuchet MS",sans-serif;
+  --body:"Figtree","Segoe UI",system-ui,-apple-system,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;background:var(--ink);color:var(--text);font:15px/1.45 var(--body);
+  display:grid;grid-template:"top top top" auto "rail stage dock" minmax(0,1fr) / 196px minmax(0,1.2fr) minmax(300px,.8fr)}
+body[data-mode=edit]{--acc:var(--edit)} body[data-mode=video]{--acc:var(--video)}
+body[data-mode=sound]{--acc:var(--sound)} body[data-mode=lib]{--acc:var(--lib)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);margin:0;letter-spacing:.01em}
+
+/* top bar */
+.top{grid-area:top;display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand svg{width:30px;height:30px;flex:none}
+.brand b{font:700 17px/1 var(--display);display:block}
+.brand small{color:var(--mute);font-size:11.5px;display:block;margin-top:3px}
+.proj{flex:1;min-width:60px;text-align:center}
+.proj input{width:100%;max-width:260px;text-align:center;background:none;border:1px solid transparent;border-radius:8px;padding:6px 8px;font-weight:600}
+.proj input:hover,.proj input:focus{border-color:var(--line)}
+.credits{border:1px solid var(--line);background:var(--raise);border-radius:10px;padding:6px 10px;min-width:124px;text-align:left}
+.credits span{font-size:11px;color:var(--mute);display:block}
+.credits b{font:600 15px/1.2 var(--display)}
+.meter{height:3px;border-radius:2px;background:var(--line);margin-top:5px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--acc);transition:width .4s}
+
+/* rail */
+.rail{grid-area:rail;border-right:1px solid var(--line);background:var(--panel);padding:14px 10px;display:flex;flex-direction:column;gap:6px;overflow:auto}
+.rail p{margin:14px 8px 4px;font-size:12px;color:var(--mute)}
+.nav{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:10px;border:1px solid transparent;background:none;text-align:left;font-weight:500;color:var(--mute);white-space:nowrap}
+.nav svg{width:18px;height:18px;flex:none}
+.nav:hover{color:var(--text);background:var(--raise)}
+.nav.mode{border-color:var(--line);color:var(--text)}
+.nav[aria-current=page]{color:var(--ink);background:var(--c);border-color:var(--c);font-weight:700;box-shadow:0 0 22px -6px var(--c)}
+.nav.libn[aria-current=page]{color:var(--text);background:var(--raise);border-color:var(--line2);box-shadow:none}
+
+/* stage */
+.stage{grid-area:stage;overflow:auto;padding:18px;position:relative;
+  background:radial-gradient(900px 380px at 50% -140px,color-mix(in srgb,var(--acc) 13%,transparent),transparent 70%)}
+.stage::before{content:"";position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,transparent,var(--acc),transparent);opacity:.7}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.hero{text-align:center;padding:7vh 0 2vh}
+.hero h1{font-size:clamp(24px,3.4vw,34px);font-weight:600}
+.hero p{color:var(--mute);margin:8px auto 0;max-width:46ch}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.composer{border-radius:16px;border:1px solid var(--line);background:var(--panel);padding:10px;display:flex;gap:10px;align-items:stretch}
+.composer:focus-within{border-color:var(--acc)}
+textarea,input[type=text]{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;resize:vertical}
+.composer textarea{background:none;border:0;min-height:74px;padding:6px 8px;resize:none}
+.composer textarea:focus{outline:none}
+.go{flex:none;min-width:104px;border:0;border-radius:12px;background:var(--acc);color:var(--ink);font:700 15px var(--display);padding:10px 14px;box-shadow:0 0 28px -8px var(--acc)}
+.go small{display:block;font:600 12px var(--body);opacity:.75;margin-top:2px}
+.go:disabled{opacity:.55;cursor:progress}
+.ctrls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ctrls label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mute)}
+select{background:var(--raise);border:1px solid var(--line);border-radius:9px;padding:7px 10px;max-width:190px}
+.btn{border:1px solid var(--line);background:var(--raise);border-radius:9px;padding:7px 12px;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--acc)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--ink)}
+.btn.danger:hover{border-color:#ff6b6b;color:#ff9c9c}
+.switch{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--raise);border-radius:999px;padding:5px 12px 5px 6px;font-weight:600;font-size:14px}
+.switch i{width:30px;height:18px;border-radius:9px;background:var(--line);position:relative;transition:background .2s}
+.switch i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--text);transition:transform .2s}
+.switch[aria-pressed=true] i{background:var(--acc)} .switch[aria-pressed=true] i::after{transform:translateX(12px);background:var(--ink)}
+.switch:disabled{opacity:.5;cursor:not-allowed}
+.note{color:var(--mute);font-size:13px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:none;border-radius:999px;padding:5px 11px;font-size:13px;color:var(--mute)}
+.chip:hover,.chip[aria-pressed=true]{color:var(--text);border-color:var(--acc)}
+.chip[aria-pressed=true]{background:color-mix(in srgb,var(--acc) 16%,transparent)}
+
+/* chat */
+.thread{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow:auto;padding:4px}
+.msg{max-width:88%;padding:10px 13px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--raise);border:1px solid var(--line)}
+.msg.assistant{align-self:flex-start;color:color-mix(in srgb,var(--acc) 70%,var(--text));border:1px solid color-mix(in srgb,var(--acc) 30%,var(--line));background:var(--panel)}
+.msg .row{margin-top:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* edit */
+.canvas{background:#05070c;border:1px dashed var(--line2);border-radius:14px;min-height:260px;display:grid;place-items:center;padding:12px;text-align:center}
+.canvas img{max-width:100%;max-height:52vh;border-radius:8px;outline:1px solid var(--acc);outline-offset:3px}
+.refs{display:flex;gap:8px}
+.ref{width:58px;aspect-ratio:3/4;border:1px dashed var(--line2);border-radius:8px;overflow:hidden;display:grid;place-items:center;color:var(--mute);background:none;padding:0}
+.ref img{width:100%;height:100%;object-fit:cover}
+
+/* dock + tiles */
+.dock{grid-area:dock;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.dock h2,.sec{font:600 14px var(--display);color:var(--mute);display:flex;align-items:center;gap:10px;justify-content:space-between}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.grid.big{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.tile{position:relative;aspect-ratio:3/4;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--raise);padding:0;display:block;width:100%}
+.tile img{width:100%;height:100%;object-fit:cover;display:block}
+.tile:hover{border-color:var(--acc)}
+.tile .tag{position:absolute;left:5px;bottom:5px;font-size:10.5px;font-weight:700;background:#000a;border-radius:5px;padding:1px 6px}
+.tile .pin{position:absolute;right:5px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.ptile{padding:8px;font-size:11.5px;line-height:1.35;color:var(--mute);text-align:left;overflow:hidden}
+.ptile span{display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden}
+.ghost{display:grid;place-items:center;color:var(--mute);font-size:12px;background:linear-gradient(100deg,var(--raise) 30%,var(--line) 50%,var(--raise) 70%);background-size:220% 100%;animation:sh 1.1s linear infinite}
+@keyframes sh{to{background-position:-220% 0}}
+.empty{border:1px dashed var(--line2);border-radius:12px;padding:18px;color:var(--mute);text-align:center;font-size:14px}
+.lcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.lcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.lcard h3{font-size:15px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.lcard p{margin:0;color:var(--mute);font-size:13px;flex:1}
+.lcard.on{border-color:var(--acc)}
+.built{font:600 10.5px var(--body);color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 45%,transparent);border-radius:999px;padding:1px 7px}
+.form{display:flex;flex-direction:column;gap:8px}
+
+/* modal + toast */
+#modal:empty{display:none}
+#modal{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:16px;z-index:40}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;width:min(460px,100%);max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.sheet img{max-height:50vh;max-width:100%;margin:0 auto;border-radius:10px;display:block}
+.sheet p{margin:0;color:var(--mute);font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--text);color:var(--ink);font-weight:600;padding:9px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:900px){
+  html,body{height:auto;min-height:100%}
+  body{display:block;padding-bottom:74px}
+  body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+  .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;padding:8px 12px;gap:8px}
+  .proj{display:none} .credits{margin-left:auto}
+  .rail{position:fixed;left:0;right:0;bottom:0;z-index:20;flex-direction:row;border-right:0;border-top:1px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));overflow-x:auto;gap:6px}
+  .rail p{display:none}
+  .nav{flex-direction:column;gap:3px;font-size:11.5px;padding:6px 10px;min-width:62px;width:auto;align-items:center}
+  .stage{overflow:visible;padding:14px 12px}
+  .dock{border-left:0;border-top:1px solid var(--line);overflow:visible}
+  .hero{padding:3vh 0 1vh}
+  .composer{flex-direction:column} .go{width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.tile video{width:100%;height:100%;object-fit:cover;display:block}
+.aud{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:100%;padding:8px;color:var(--sound);text-align:center}
+.aud svg{width:26px;height:26px}.aud small{color:var(--mute);font-size:11px;line-height:1.3}
+.ref video{width:100%;height:100%;object-fit:cover}
+.sheet video{max-height:56vh;max-width:100%;margin:0 auto;border-radius:10px;display:block;background:#000}
+input[type=number],input[type=password]{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%}
+label.note{display:flex;flex-direction:column;gap:4px}label.note.row{flex-direction:row;align-items:center}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.stats div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stats b{font:600 24px var(--display);display:block}.stats span{color:var(--mute);font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12.5px;color:var(--mute)}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:#ff7a7a}
+.pill.ok{color:var(--text)}.pill.ok::before{background:var(--create);box-shadow:0 0 8px var(--create)}
+.bar{position:relative;height:8px;border-radius:4px;background:var(--raise);margin:10px 0}
+.bar i{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--create) 45%,transparent);border-radius:4px}
+.bar b{position:absolute;top:-4px;width:3px;height:16px;background:var(--text);border-radius:2px;transform:translateX(-1px)}
+.shot{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px}
+.ghost0{display:grid;place-items:center;color:var(--mute);font-size:12px;border-style:dashed}
+.lrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.fgrid select{max-width:none;width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+</style>
+</head>
+<body data-mode="create">
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 2h7M10 2v6.2L4.4 18.6A2.3 2.3 0 0 0 6.5 22h11a2.3 2.3 0 0 0 2.1-3.4L14 8.2V2"/><path d="M10.4 12.6l4.4 2.7-4.4 2.7z" fill="var(--acc)" stroke="var(--acc)"/></svg>
+    <div><b>Fitz Labs</b><small>AI video generator</small></div>
+  </div>
+  <div class="proj"><input type="text" id="proj" aria-label="Project name" maxlength="40"></div>
+  <button class="credits" data-act="credits" aria-label="Engine and credits"><span id="crl">Credits</span><b id="cr"></b><div class="meter"><i id="crm"></i></div></button>
+</header>
+<nav class="rail" id="rail" aria-label="Studio"></nav>
+<main class="stage" id="stage"></main>
+<aside class="dock" id="dock" aria-label="References"></aside>
+<div id="modal"></div>
+<div id="toast" role="status"></div>
+<input type="file" id="file" accept="image/*" multiple hidden>
+
+<script>
+const LS='fitzlabs.studio.v2', MAXC=12000;
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+const PRESETS=[
+ ['Selfie','Reframe as a handheld selfie taken by the subject, arm slightly visible, natural phone-camera perspective.'],
+ ['Side profile','Turn the subject to a clean 90° side profile, same lighting and setting.'],
+ ['Over shoulder','Shoot from behind the subject’s shoulder so the shoulder anchors the foreground and the scene stays readable.'],
+ ['From behind','Place the camera behind the subject, showing the back of the head and body facing the scene.'],
+ ['Low angle','Drop the camera low and look up at the subject for more presence and scale.'],
+ ['Drone view','High aerial view looking down, wide environment, subject still easy to find.'],
+ ['Zoom in','Tighter framing on the face and upper body, less background.'],
+ ['Zoom out','Wider framing with more environment and breathing room around the subject.'],
+ ['Enhance realism','Push photographic realism: natural skin texture, accurate shadows, true lens behavior.'],
+ ['Remove background','Remove the background. Change nothing else.'],
+ ['Expand margins','Fill in the margins. Do not change anything else.']
+].map(([name,prompt],i)=>({id:'b'+i,name,prompt,builtin:true}));
+const STYLES=[
+ {id:'none',name:'None',prompt:'',builtin:true},
+ {id:'s1',name:'Digicam photoreal',prompt:'Early-2000s compact digital camera look, direct flash, slight noise, candid framing, true-to-life color.',builtin:true},
+ {id:'s2',name:'Soft storybook',prompt:'Warm storybook illustration, rounded shapes, gentle gradients, friendly expressive characters.',builtin:true},
+ {id:'s3',name:'Ink noir cartoon',prompt:'Monochrome ink cartoon, scratchy hand-drawn lines, heavy cross-hatching, tall exaggerated forms, moody shadows.',builtin:true}
+];
+const TPL=[
+ {id:'t25',name:'Hook, demo, proof',why:'The default for selling a product cold. Lands inside the 21–34 second window TikTok reports as best for conversions.',shots:[
+  ['Hook',3,'Extreme close-up, fast movement toward camera, the product snaps into frame in the first second.'],
+  ['Problem',4,'The person struggles with the everyday problem this product solves, handheld phone footage, natural light.'],
+  ['Reveal',4,'Hands unbox or pick up the product, slow push-in, clean background.'],
+  ['Demo',6,'The product in use, medium shot, one clear action from start to finish.'],
+  ['Proof',4,'The result: before and after side by side, or the person reacting with real relief.'],
+  ['Call to action',4,'Product hero shot, steady camera, space at the top for the offer text.']]},
+ {id:'t15',name:'Quick product spot',why:'For simple, low-price products and retargeting people who already know you. Cheap to render and to test.',shots:[
+  ['Hook',3,'The single most surprising thing the product does, shown in close-up.'],
+  ['Demo',5,'The product in use, one continuous action.'],
+  ['Benefit',4,'The result on screen, bright and clear.'],
+  ['Call to action',3,'Product hero shot with room for the offer text.']]},
+ {id:'t31',name:'Story ad',why:'For products that need explaining or cost more. Sits at the top of the conversion window, so every shot has to earn its place.',shots:[
+  ['Hook',3,'A bold visual question: the person stops mid-action and looks at camera.'],
+  ['Setup',5,'Their normal day, wide shot, establishing who they are.'],
+  ['Struggle',5,'The problem gets in the way, closer framing, slight handheld shake.'],
+  ['Discovery',4,'They find the product, soft push-in on their face then the product.'],
+  ['Demo',6,'Using the product step by step, medium shot.'],
+  ['Result',4,'Life after: same scene as the setup, visibly better.'],
+  ['Call to action',4,'Product hero shot with room for the offer text.']]},
+ {id:'t9',name:'Retargeting bumper',why:'A reminder for warm audiences. Too short to sell cold, good for abandoned carts and limited offers.',shots:[
+  ['Hook',2,'Product in motion, hard cut in.'],['Offer',4,'Product hero shot, room for the discount text.'],['Call to action',3,'Hand taps or picks up the product.']]}
+];
+const NAV=[['dashboard','Dashboard',0],['projects','Projects',0],['create','Create',1],['edit','Edit',1],['video','Video',1],['sound','Sound',1],
+ ['media','Media',0,'Libraries'],['chars','Characters',0],['elements','Elements',0],['presets','Presets',0],['styles','Styles',0],['templates','Templates',0,'Studio'],['resources','Resources',0]];
+const ICON={create:'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 16.5v4M16.5 18.5h4',edit:'M6 2v16h16M2 6h16v16',video:'M3 6h13v12H3zM16 10l5-3v10l-5-3',sound:'M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4',media:'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6',chars:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6',presets:'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',styles:'M12 3a9 9 0 1 0 0 18c1.4 0 2-.9 2-1.9 0-1.1-.6-1.5-.1-2.5.6-1 2-.6 3.6-.6A3.5 3.5 0 0 0 21 12.5 9 9 0 0 0 12 3z',
+ dashboard:'M3 3h8v10H3zM13 3h8v6h-8zM13 11h8v10h-8zM3 15h8v6H3z',projects:'M3 7h18v13H3zM3 7l2-3h5l2 3',elements:'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7',templates:'M4 4h16v5H4zM4 12h7v8H4zM14 12h6v8h-6z',resources:'M5 4h14v6H5zM5 14h14v6H5zM8 7h.01M8 17h.01M12 7h4M12 17h4'};
+const ico=n=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICON[n]}"/></svg>`;
+
+let S={project:'Untitled project',credits:MAXC,view:'dashboard',lastMode:'create',media:[],slots:[],chars:[],elements:[],projects:[],presets:PRESETS,styles:STYLES,
+  set:{ratio:'9:16',res:'1K',dur:'5s',chat:false,charOn:false,charId:'',styleId:'none'},editId:'',selChar:'',selProj:'',mfilter:'all'};
+const P={create:'',edit:'',video:'',sound:'',chat:''};
+let chat=[], busy=false, busyShot='', sample=null, warned=false, live=false, health=null, stats=null, pushT, armed='';
+const R={settings:null,offers:null,instances:null,q:{gpu:'RTX 4090',max_price:'0.6',min_vram:'24',spot:'false'},loading:''};
+
+function adopt(d){if(d&&typeof d==='object'&&d.set){S={...S,...d,set:{...S.set,...d.set}};
+  for(const k of['media','slots','chars','elements','projects'])if(!Array.isArray(S[k]))S[k]=[];
+  if(!Array.isArray(S.presets)||!S.presets.length)S.presets=PRESETS;if(!Array.isArray(S.styles)||!S.styles.length)S.styles=STYLES}}
+try{adopt(JSON.parse(localStorage.getItem(LS)||'null'))}catch(e){}
+function save(){
+  const put=o=>localStorage.setItem(LS,JSON.stringify(o));
+  try{put(S)}catch(e){
+    try{put({...S,media:S.media.slice(0,10)})}catch(e2){try{put({...S,media:[],slots:[]})}catch(e3){}}
+    if(!warned&&!live){warned=true;toast('Storage is full. Older media stays for this session only.')}
+  }
+  if(live){clearTimeout(pushT);pushT=setTimeout(()=>api('/state',{method:'PUT',body:S}).catch(()=>{}),600)}
+}
+function toast(t,ms=2800){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('on'),ms)}
+const fail=e=>toast(e&&e.message?e.message:'Something went wrong. Try again.',6000);
+async function api(path,opt={}){
+  const r=await fetch('/api'+path,{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:{},body:opt.body?JSON.stringify(opt.body):undefined});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(typeof j.detail==='string'?j.detail:'The server returned an error ('+r.status+').');return j}
+const M=id=>S.media.find(m=>m.id===id);
+const isMode=v=>['create','edit','video','sound'].includes(v);
+const costOf=k=>k==='video'?(S.set.dur==='10s'?80:40):k==='sound'?6:({'1K':4,'2K':5,'4K':8}[S.set.res]||4);
+const canChat=()=>!!sample||(live&&health&&health.hf);
+const firstSlot=kind=>S.slots.map(M).find(m=>m&&m.kind===kind);
+
+/* ---------- preview renderer (used only when no engine is connected) ---------- */
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const loadImg=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
+function dims(r){const[a,b]=r.split(':').map(Number),L=720;return a>=b?[L,Math.round(L*b/a)]:[Math.round(L*a/b),L]}
+function fit(ctx,img,w,h,contain){const s=(contain?Math.min:Math.max)(w/img.width,h/img.height),dw=img.width*s,dh=img.height*s;ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh)}
+function wrapText(ctx,text,maxW,maxLines){const words=text.split(/\s+/),lines=[];let cur='';
+  for(const w of words){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;if(lines.length===maxLines)break}else cur=t}
+  if(lines.length<maxLines&&cur)lines.push(cur);else if(lines.length===maxLines)lines[maxLines-1]=lines[maxLines-1].replace(/.{0,3}$/,'…');return lines}
+async function drawFrame(prompt,ratio,baseSrc,kind){
+  const[w,h]=dims(ratio),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d'),r=rng(hash(prompt+kind)),hue=Math.floor(r()*360);
+  let base=null;if(baseSrc){try{base=await loadImg(baseSrc)}catch(e){}}
+  if(base){
+    const t=document.createElement('canvas');t.width=28;t.height=Math.max(8,Math.round(28*h/w));fit(t.getContext('2d'),base,t.width,t.height,false);
+    x.imageSmoothingQuality='high';x.drawImage(t,0,0,w,h);x.fillStyle='rgba(5,8,14,.25)';x.fillRect(0,0,w,h);fit(x,base,w,h,kind==='edit');
+    const g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,`hsla(${hue},80%,60%,.16)`);g.addColorStop(1,`hsla(${(hue+70)%360},80%,45%,.12)`);x.fillStyle=g;x.fillRect(0,0,w,h);
+  }else{
+    const g=x.createLinearGradient(0,0,w*.4,h);g.addColorStop(0,`hsl(${hue},55%,16%)`);g.addColorStop(1,`hsl(${(hue+50)%360},60%,7%)`);x.fillStyle=g;x.fillRect(0,0,w,h);
+    for(let i=0;i<5;i++){const cx=r()*w,cy=r()*h,rad=(.25+r()*.45)*Math.max(w,h),b=x.createRadialGradient(cx,cy,0,cx,cy,rad);
+      b.addColorStop(0,`hsla(${(hue+i*38)%360},85%,${50+r()*15}%,.5)`);b.addColorStop(1,'transparent');x.fillStyle=b;x.fillRect(0,0,w,h)}
+  }
+  const v=x.createLinearGradient(0,h*.55,0,h);v.addColorStop(0,'transparent');v.addColorStop(1,'rgba(0,0,0,.82)');x.fillStyle=v;x.fillRect(0,0,w,h);
+  x.font='600 17px Figtree, system-ui, sans-serif';x.fillStyle='#fff';
+  const lines=wrapText(x,prompt,w-40,4);lines.forEach((l,i)=>x.fillText(l,20,h-22-(lines.length-1-i)*23));
+  x.font='700 12px Figtree, system-ui, sans-serif';const lab=kind==='video'?'Preview clip, no engine connected':'Preview frame, no engine connected';const tw=x.measureText(lab).width+16;
+  x.fillStyle='rgba(0,0,0,.6)';x.fillRect(12,12,tw,22);x.fillStyle='#fff';x.fillText(lab,20,27);
+  if(kind==='video'){x.fillStyle='rgba(0,0,0,.45)';x.beginPath();x.arc(w/2,h/2,38,0,7);x.fill();x.fillStyle='#fff';x.beginPath();x.moveTo(w/2-11,h/2-17);x.lineTo(w/2+19,h/2);x.lineTo(w/2-11,h/2+17);x.fill()}
+  return c.toDataURL('image/jpeg',.82);
+}
+function drawWave(prompt){
+  const w=540,h=720,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d'),r=rng(hash(prompt));
+  x.fillStyle='#0b0f1a';x.fillRect(0,0,w,h);const n=46,bw=(w-60)/n;
+  for(let i=0;i<n;i++){const a=(.15+r()*.85)*Math.sin(Math.PI*(i+.5)/n)*230+8;x.fillStyle=`hsl(${338+i*.9},95%,${58+r()*10}%)`;x.fillRect(30+i*bw,h*.42-a/2,bw*.6,a)}
+  x.font='600 17px Figtree, system-ui, sans-serif';x.fillStyle='#fff';wrapText(x,prompt,w-40,4).forEach((l,i)=>x.fillText(l,20,h-104+i*23));
+  x.font='700 12px Figtree, system-ui, sans-serif';x.fillStyle='rgba(255,255,255,.7)';x.fillText('Preview voiceover, no engine connected',20,30);
+  return c.toDataURL('image/jpeg',.82);
+}
+
+/* ---------- generation ---------- */
+async function runJob(body){
+  const{id}=await api('/generate',{method:'POST',body});
+  for(;;){await wait(2500);const j=await api('/jobs/'+id);if(j.status==='done')return j.media;if(j.status==='error')throw new Error(j.error||'The render failed.')}
+}
+async function generate(kind,o={}){
+  const p=(o.prompt??P[kind]).trim();if(busy)return;if(!p){toast('Write a prompt first');return}
+  if(kind==='edit'&&!M(S.editId)){toast('Pick an image to edit first');return}
+  const ch=S.set.charOn&&S.chars.find(c=>c.id===S.set.charId),st=S.styles.find(s=>s.id===S.set.styleId),slotImg=firstSlot('image');
+  const base=kind==='edit'?M(S.editId):kind==='video'?(slotImg||null):kind==='create'?((ch&&M(ch.refs[0]))||(live?null:slotImg)||null):null;
+  let m;
+  if(live){
+    busy=true;busyShot=o.shot?o.shot.id:'';render();
+    const full=p+(kind==='create'&&ch?` The subject is ${ch.name}: ${ch.desc}`:'')+(kind!=='sound'&&st&&st.prompt?` Style: ${st.prompt}`:'');
+    const img=base&&base.file&&base.kind==='image'?base.file:'';
+    try{m=await runJob({kind:kind==='create'?(img?'edit':'image'):kind,prompt:full,ratio:S.set.ratio,image:img,seconds:o.seconds||parseInt(S.set.dur)});m.prompt=p}
+    catch(e){busy=false;busyShot='';render();fail(e);return}
+  }else{
+    const cost=costOf(kind);if(S.credits<cost){toast('Not enough demo credits. Tap the credits box to refill.');return}
+    busy=true;busyShot=o.shot?o.shot.id:'';render();await wait(700);
+    const src=kind==='sound'?drawWave(p):await drawFrame(p,S.set.ratio,base&&base.src,kind);
+    m={id:uid(),kind:kind==='video'?'video':kind==='sound'?'audio':'image',src,prompt:p,meta:'Preview only'};S.credits-=cost;
+  }
+  S.media.unshift(m);if(kind==='edit')S.editId=m.id;if(o.shot)o.shot.mediaId=m.id;busy=false;busyShot='';save();render();
+  toast(live?'Render added to your reference grid':'Preview added. Connect an engine on the Resources page for real renders.',live?2800:4500);
+}
+async function addFiles(files){
+  for(const f of files){
+    try{
+      if(live){const fd=new FormData();fd.append('file',f);const r=await fetch('/api/upload',{method:'POST',body:fd});const j=await r.json();if(!r.ok)throw new Error(j.detail);S.media.unshift(j);continue}
+      if(!f.type.startsWith('image/')){toast('Video and audio uploads need the self-hosted server.');continue}
+      const url=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(f)});
+      const img=await loadImg(url),s=Math.min(1,900/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);S.media.unshift({id:uid(),kind:'image',src:c.toDataURL('image/jpeg',.85),prompt:'',meta:'Uploaded: '+f.name});
+    }catch(e){toast('Couldn’t add '+f.name)}}
+  save();render();
+}
+async function sendChat(){
+  const t=P.chat.trim();if(!t||busy||!canChat())return;
+  chat.push({role:'user',text:t},{role:'assistant',text:''});P.chat='';busy=true;render();
+  const ch=S.set.charOn&&S.chars.find(c=>c.id===S.set.charId),st=S.styles.find(s=>s.id===S.set.styleId);
+  const sys='You write prompts for an AI image and video generator. Turn the request into one vivid, production-ready prompt of 60 to 110 words covering subject, wardrobe, setting, lighting, lens and mood. When asked for a change, rewrite the whole prompt with that change. Reply with the prompt only, no preamble or quotes.'
+    +(ch?`\nThe main character is ${ch.name}: ${ch.desc}`:'')+(st&&st.prompt?`\nVisual style to follow: ${st.prompt}`:'');
+  const turns=chat.slice(0,-1),last=chat[chat.length-1];
+  try{
+    if(sample){const r=await sample(turns.map((m,i)=>({role:m.role,content:i===0?sys+'\n\nRequest: '+m.text:m.text})),{cache:false,modelTier:'quick',onText:({text})=>{last.text=text;const b=$('live');if(b)b.textContent=text}});last.text=r.text}
+    else last.text=(await api('/chat',{method:'POST',body:{messages:[{role:'system',content:sys},...turns.map(m=>({role:m.role,content:m.text}))]}})).text;
+  }catch(e){last.err=e&&e.code==='not_granted'?'Chat mode needs permission to ask Claude.':e&&e.code==='rate_limited'?'Too many requests. Wait a moment, then send again.':'That prompt didn’t come through. '+(e&&e.message&&!e.code?e.message:'Send it again.');if(e&&e.text)last.text=e.text}
+  busy=false;render();const th=document.querySelector('.thread');if(th)th.scrollTop=th.scrollHeight;
+}
+
+/* ---------- live data ---------- */
+async function loadRes(what){
+  if(!live)return;R.loading=what||'all';render();
+  try{
+    if(!what||what==='settings'){R.settings=await api('/settings');health=await api('/health')}
+    if((!what||what==='instances')&&health.vast)R.instances=await api('/vast/instances');
+    if(what==='offers')R.offers=await api('/vast/offers?'+new URLSearchParams(R.q));
+  }catch(e){fail(e)}
+  R.loading='';render();
+}
+function loadStats(){if(live)api('/stats').then(s=>{stats=s;if(S.view==='dashboard')render()}).catch(()=>{})}
+
+/* ---------- rendering ---------- */
+function sel(key,opts,label){const v=S.set[key];return`<label>${label}<select data-set="${key}">${opts.map(o=>{const[val,txt]=Array.isArray(o)?o:[o,o];return`<option value="${esc(val)}"${val===v?' selected':''}>${esc(txt)}</option>`}).join('')}</select></label>`}
+function thumb(m){
+  if(m.file&&m.kind==='video')return`<video src="${esc(m.src)}#t=0.1" muted playsinline preload="metadata"></video>`;
+  if(m.file&&m.kind==='audio')return`<span class="aud">${ico('sound')}<small>${esc((m.prompt||'Sound').slice(0,60))}</small></span>`;
+  return`<img src="${esc(m.src)}" alt="${esc(m.prompt||m.meta||'Media')}" loading="lazy">`}
+function tile(m,act='open'){
+  const pin=S.slots.includes(m.id)?'<i class="pin" title="In quick slots"></i>':'';
+  if(m.kind==='prompt')return`<button class="tile ptile" data-act="${act}" data-id="${m.id}"><span>${esc(m.prompt)}</span>${pin}</button>`;
+  const tag=m.kind==='video'?'<span class="tag">Video</span>':m.kind==='audio'?'<span class="tag">Sound</span>':'';
+  return`<button class="tile" data-act="${act}" data-id="${m.id}">${thumb(m)}${tag}${pin}</button>`;
+}
+function composer(kind,ph,label){
+  return`<div class="composer"><textarea data-p="${kind}" placeholder="${esc(ph)}" aria-label="Prompt">${esc(P[kind])}</textarea>
+  <button class="go" data-act="gen" data-kind="${kind}" ${busy?'disabled':''}>${busy?'Rendering…':label}<small>${live?'Live render':costOf(kind)+' demo credits'}</small></button></div>`}
+const styleSel=()=>sel('styleId',S.styles.map(s=>[s.id,s.name]),'Style');
+const ratioSel=()=>sel('ratio',['9:16','4:5','1:1','16:9'],'Aspect');
+const demo=()=>live?'':'<p class="note">No engine is connected, so Generate makes labeled preview frames. <button class="btn" data-act="go" data-view="resources">Connect an engine</button></p>';
+const h1=(t,extra='')=>`<div class="sec"><h1 style="font-size:20px;color:var(--text)">${t}</h1>${extra}</div>`;
+const pill=(ok,t)=>`<span class="pill ${ok?'ok':''}">${t}</span>`;
+const total=p=>p.shots.reduce((a,s)=>a+(+s.sec||0),0);
+function verdict(t){return t<21?'Short of the 21–34 second window. Fine for retargeting, thin for a cold sale.':t<=34?'Inside the 21–34 second window TikTok reports as best for conversions.':'Past 34 seconds. Completion drops from here, so every extra shot has to earn its place.'}
+
+const V={
+dashboard(){
+  const n=k=>S.media.filter(m=>m.kind===k).length;
+  const eng=live?`<div class="row">${pill(1,'Server connected')}${pill(health.hf,'Hugging Face '+(health.hf?'ready':'needs a token'))}${pill(health.comfy,health.comfy?'GPU connected':'No GPU rented')}${pill(health.ffmpeg,health.ffmpeg?'Stitching ready':'ffmpeg missing')}</div>`
+    :`<div class="row">${pill(0,'Preview mode')}<span class="note">This copy isn’t connected to a server, so renders are preview frames.</span></div>`;
+  const st=live&&stats?`<div class="stats"><div><b>${stats.renders.hf||0}</b><span>Hugging Face renders</span></div><div><b>${stats.renders.comfy||0}</b><span>Renders on your GPU</span></div><div><b>$${stats.gpu_usd.toFixed(2)}</b><span>GPU time spent rendering</span></div><div><b>${stats.failed}</b><span>Failed renders</span></div></div>`:'';
+  return`<div class="wrap" style="max-width:none">${h1('Dashboard','<button class="btn" data-act="go" data-view="resources">Manage resources</button>')}${eng}
+    <div class="stats"><div><b>${n('image')}</b><span>Images</span></div><div><b>${n('video')}</b><span>Clips</span></div><div><b>${n('audio')}</b><span>Voiceovers</span></div><div><b>${S.projects.length}</b><span>Projects</span></div></div>${st}
+    <div class="card"><h3 style="margin-bottom:6px">How long should the video be?</h3><p class="note">Build each ad to 21–34 seconds from 3–6 second shots. The first 2–3 seconds are the hook and decide whether anyone sees the rest. Use 9–15 seconds only for retargeting. Templates has all four structures ready.</p>
+      <div class="row" style="margin-top:10px"><button class="btn pri" data-act="go" data-view="templates">Start from a template</button></div></div>
+    ${S.projects.length?`<div class="sec">Projects</div><div class="lcards">${S.projects.map(projCard).join('')}</div>`:''}
+    ${S.media.length?`<div class="sec">Latest media</div><div class="grid big">${S.media.slice(0,8).map(m=>tile(m)).join('')}</div>`:''}</div>`;
+},
+projects(){
+  const p=S.projects.find(x=>x.id===S.selProj);
+  if(!p)return`<div class="wrap" style="max-width:none">${h1('Projects','<button class="btn pri" data-act="go" data-view="templates">New project</button>')}
+    ${S.projects.length?`<div class="lcards">${S.projects.map(projCard).join('')}</div>`:'<div class="empty">A project is one ad: a list of shots you generate one by one, then stitch into the final cut. Start one from a template.</div>'}</div>`;
+  const t=total(p),ready=p.shots.filter(s=>{const m=M(s.mediaId);return m&&m.file}).length,aud=firstSlot('audio');
+  return`<div class="wrap">${h1('<button class="btn" data-act="closeproj">All projects</button>')}
+    <input type="text" data-proj="name" value="${esc(p.name)}" maxlength="50" aria-label="Project name" style="font:600 20px var(--display)">
+    <div class="card"><div class="sec" style="color:var(--text)"><span>${t} seconds, ${p.shots.length} shots</span><span class="note">Target 21–34</span></div>
+      <div class="bar"><i style="left:${21/45*100}%;width:${13/45*100}%"></i><b style="left:${Math.min(100,t/45*100)}%"></b></div><p class="note">${verdict(t)}</p></div>
+    ${p.shots.map((s,i)=>{const m=M(s.mediaId);return`<div class="card shot"><div class="shotm">${busyShot===s.id?'<div class="tile ghost">Rendering</div>':m?tile(m):'<div class="tile ghost0">No clip yet</div>'}</div>
+      <div class="form"><div class="row"><input type="text" data-shot="${s.id}" data-f="label" value="${esc(s.label)}" aria-label="Shot name" style="flex:1;min-width:110px">
+        <label class="note row">Seconds <input type="number" min="1" max="10" step="0.5" data-shot="${s.id}" data-f="sec" value="${s.sec}" style="width:74px"></label></div>
+      <textarea rows="3" data-shot="${s.id}" data-f="prompt" aria-label="Shot ${i+1} prompt">${esc(s.prompt)}</textarea>
+      <div class="row"><button class="btn pri" data-act="genshot" data-id="${s.id}" ${busy?'disabled':''}>Generate shot</button><button class="btn" data-act="slotshot" data-id="${s.id}">Use first quick slot</button><button class="btn danger" data-act="delshot" data-id="${s.id}">Remove</button></div></div></div>`}).join('')}
+    <div class="row"><button class="btn" data-act="addshot">Add shot</button><span class="note">Each shot starts from the first image in your quick slots, if there is one.</span></div>
+    <div class="card form"><div class="row">${ratioSel()}<button class="go" data-act="stitch" ${busy||!live||!ready?'disabled':''} style="margin-left:auto">${busy&&busyShot==='stitch'?'Stitching…':'Stitch final cut'}<small>${ready} of ${p.shots.length} shots ready</small></button></div>
+      <p class="note">${live?(aud?'The voiceover in your quick slots becomes the soundtrack.':'Pin a voiceover to quick slots to add it as the soundtrack.')+' Each clip is trimmed to its seconds and cropped to the chosen aspect.':'Stitching runs on the self-hosted server with ffmpeg.'}</p></div></div>`;
+},
+create(){
+  const charOpts=[['','Choose…'],...S.chars.map(c=>[c.id,c.name])],cc=canChat();
+  const ctrls=`<div class="ctrls">
+    <button class="switch" data-act="tog" data-key="chat" aria-pressed="${S.set.chat&&cc}" ${cc?'':'disabled'}><i></i>Chat mode</button>
+    <button class="switch" data-act="tog" data-key="charOn" aria-pressed="${S.set.charOn}"><i></i>Character</button>
+    ${S.set.charOn?sel('charId',charOpts,'Who'):''}${ratioSel()}${live?'':sel('res',['1K','2K','4K'],'Size')}${styleSel()}</div>
+    ${cc?'':'<p class="note">Chat mode needs a Hugging Face token on the server, or this page open inside Claude.</p>'}
+    ${S.set.charOn&&!S.chars.length?'<p class="note">No characters yet. <button class="btn" data-act="go" data-view="chars">Create a character</button></p>':''}
+    ${live&&S.set.charOn?'<p class="note">With Character on, the render starts from the character’s first reference image using your edit model.</p>':''}`;
+  if(S.set.chat&&cc){
+    const th=chat.length?chat.map((m,i)=>{const lastA=i===chat.length-1&&m.role==='assistant';
+      return`<div class="msg ${m.role}"><span ${lastA?'id="live"':''}>${esc(m.text)||(m.err?'':(busy&&lastA?'Writing your prompt…':''))}</span>${m.err?`<span>${esc(m.err)}</span>`:''}${m.role==='assistant'&&m.text&&!(busy&&lastA)?`<div class="row"><button class="btn pri" data-act="usechat" data-i="${i}">Use as prompt</button><button class="btn" data-act="savechat" data-i="${i}">Save to grid</button></div>`:''}</div>`}).join('')
+      :'<div class="empty">Describe a rough idea and get back a full, detailed prompt. Then ask for changes, like “put him in a jungle bog with a horror mood”.</div>';
+    return`<div class="wrap"><div class="thread">${th}</div>
+      <div class="composer"><textarea data-p="chat" id="chatin" placeholder="Describe the shot, or ask for a change" aria-label="Message">${esc(P.chat)}</textarea>
+      <button class="go" data-act="chat" ${busy?'disabled':''}>${busy?'Writing…':'Send'}</button></div>${ctrls}
+      ${chat.length?'<div class="row"><button class="btn" data-act="clearchat">Clear chat</button></div>':''}</div>`;
+  }
+  return`<div class="wrap"><div class="hero"><h1>What do you want to make?</h1><p>Write the shot. Add a character and a style to keep every frame consistent.</p></div>
+    ${composer('create','A woman riding a horse at golden hour','Generate')}${ctrls}${demo()}</div>`;
+},
+edit(){
+  const m=M(S.editId),refs=S.slots.map(M).filter(x=>x&&x.kind==='image').slice(0,3);
+  return`<div class="wrap">
+    <div class="canvas">${m&&m.kind==='image'?`<img src="${esc(m.src)}" alt="${esc(m.prompt||'Image being edited')}">`:'<div><b>Nothing on the canvas</b><p class="note">Tap an image in the reference grid, then choose Open in Edit.</p></div>'}</div>
+    <div><div class="sec" style="margin-bottom:8px">Prompt presets <button class="btn" data-act="go" data-view="presets">Presets library</button></div>
+      <div class="chips">${S.presets.map(p=>`<button class="chip" data-act="preset" data-id="${p.id}">${esc(p.name)}</button>`).join('')}</div></div>
+    ${composer('edit','Put the swim trunks on the man at the beach','Generate')}
+    <div class="ctrls">${ratioSel()}${styleSel()}</div>${demo()}</div>`;
+},
+video(){
+  const f=firstSlot('image');
+  return`<div class="wrap"><div class="hero"><h1>Direct the clip</h1><p>Describe the motion and the camera move. The first image in your quick slots becomes the opening frame, which also sets the aspect.</p></div>
+    <div class="row"><span class="note">Opening frame</span><div class="refs">${f?`<button class="ref" data-act="open" data-id="${f.id}">${thumb(f)}</button>`:'<span class="ref">+</span>'}</div>${f?'':'<span class="note">None pinned, so the clip starts from the prompt alone.</span>'}</div>
+    ${composer('video','Slow push-in as she turns toward camera, hair moving in the wind','Generate clip')}
+    <div class="ctrls">${ratioSel()}${sel('dur',['5s','10s'],'Length')}${styleSel()}</div>
+    <p class="note">One clip is one shot. For a full ad, build the shots in a project and stitch them.</p>${demo()}</div>`;
+},
+sound(){
+  return`<div class="wrap"><div class="hero"><h1>Add the voiceover</h1><p>Write the script exactly as it should be spoken. About 2.5 words per second, so a 25 second ad fits roughly 60 words.</p></div>
+    ${composer('sound','Still scrubbing your grill by hand? Watch this.','Generate voiceover')}
+    <p class="note">${P.sound.trim()?P.sound.trim().split(/\s+/).length+' words':''}</p>${demo()}</div>`;
+},
+media(){
+  const f=S.mfilter,list=S.media.filter(m=>f==='all'||m.kind===f);
+  return`<div class="wrap" style="max-width:none">${h1('Media','<button class="btn pri" data-act="add">Add files</button>')}
+    <div class="chips">${[['all','All media'],['image','Images'],['video','Videos'],['audio','Sounds'],['prompt','Prompts']].map(([k,l])=>`<button class="chip" data-act="mf" data-f="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
+    ${list.length?`<div class="grid big">${list.map(m=>tile(m)).join('')}</div>`:'<div class="empty">Nothing here yet. Add files or generate something in Create.</div>'}</div>`;
+},
+chars(){
+  const c=S.chars.find(x=>x.id===S.selChar)||S.chars[0];if(c)S.selChar=c.id;
+  const imgs=S.media.filter(m=>m.kind==='image');
+  const ed=c?`<div class="card form">
+      <label class="note">Name<input type="text" data-char="name" value="${esc(c.name)}" maxlength="30"></label>
+      <label class="note">Description (up to 150 characters)<textarea data-char="desc" maxlength="150" rows="2" placeholder="She has platinum white hair and dark eyes.">${esc(c.desc)}</textarea></label>
+      <div class="row"><span class="note">References</span><div class="refs">${['Portrait','Close-up','Full body'].map((l,i)=>{const m=M(c.refs[i]);return m?`<button class="ref" data-act="unref" data-i="${i}" title="Remove ${l}"><img src="${esc(m.src)}" alt="${l} reference"></button>`:`<span class="ref" title="${l}">+</span>`}).join('')}</div></div>
+      <div class="row"><button class="btn pri" data-act="usechar">Use in Create</button><button class="btn danger" data-act="delchar">Delete character</button></div></div>
+      <div class="sec">Tap an image to add it as a reference</div>
+      ${imgs.length?`<div class="grid big">${imgs.map(m=>tile(m,'addref')).join('')}</div>`:'<div class="empty">Add photos first. <button class="btn" data-act="add">Add files</button></div>'}`
+    :'<div class="empty">A character keeps the same face across every shot. Create one, give it up to three reference images, then switch Character on in Create.</div>';
+  return`<div class="wrap">${h1('Characters','<button class="btn pri" data-act="newchar">New character</button>')}
+    ${S.chars.length?`<div class="chips">${S.chars.map(x=>`<button class="chip" data-act="selchar" data-id="${x.id}" aria-pressed="${x.id===S.selChar}">${esc(x.name)}</button>`).join('')}</div>`:''}${ed}</div>`;
+},
+elements(){
+  return`<div class="wrap" style="max-width:none">${h1('Elements')}<p class="note">Products, props, outfits and locations you reuse. Adding one drops its description into your prompt and pins its image to quick slots.</p>
+    <div class="lcards">${S.elements.map(e=>{const m=M(e.mediaId);return`<div class="lcard"><h3>${esc(e.name)}<span class="built">${esc(e.type)}</span></h3>
+      ${m?`<div style="width:84px">${tile(m)}</div>`:''}<p>${esc(e.desc)}</p>
+      <div class="row"><button class="btn pri" data-act="useel" data-id="${e.id}">Add to prompt</button><button class="btn" data-act="elimg" data-id="${e.id}">Set image from first quick slot</button><button class="btn danger" data-act="delel" data-id="${e.id}">Delete</button></div></div>`}).join('')}
+      <div class="lcard form"><h3>New element</h3><input type="text" id="en" placeholder="Name, like Banana swim trunks" maxlength="40" aria-label="Element name">
+        <select id="et" aria-label="Element type"><option>Product</option><option>Prop</option><option>Outfit</option><option>Location</option></select>
+        <textarea id="ed" rows="3" placeholder="Green swim trunks with a yellow banana print, white drawstring." aria-label="Element description"></textarea><button class="btn pri" data-act="newel">Save element</button></div></div></div>`;
+},
+presets(){
+  return`<div class="wrap" style="max-width:none">${h1('Prompt presets')}<p class="note">One tap in Edit drops a preset into your prompt.</p>
+    <div class="lcards">${S.presets.map(p=>`<div class="lcard"><h3>${esc(p.name)}${p.builtin?'<span class="built">Built in</span>':''}</h3><p>${esc(p.prompt)}</p>
+      <div class="row"><button class="btn" data-act="preset" data-id="${p.id}">Use in Edit</button>${p.builtin?'':`<button class="btn danger" data-act="delpreset" data-id="${p.id}">Delete</button>`}</div></div>`).join('')}
+      <div class="lcard form"><h3>New preset</h3><input type="text" id="pn" placeholder="Preset name" maxlength="30" aria-label="Preset name"><textarea id="pp" rows="3" placeholder="Fill in the margins. Do not change anything else." aria-label="Preset prompt"></textarea><button class="btn pri" data-act="newpreset">Save preset</button></div></div></div>`;
+},
+styles(){
+  return`<div class="wrap" style="max-width:none">${h1('Styles')}<p class="note">The active style is added to every image and video prompt.</p>
+    <div class="lcards">${S.styles.map(s=>`<div class="lcard ${s.id===S.set.styleId?'on':''}"><h3>${esc(s.name)}${s.builtin?'<span class="built">Built in</span>':''}</h3><p>${esc(s.prompt)||'No style applied.'}</p>
+      <div class="row"><button class="btn ${s.id===S.set.styleId?'pri':''}" data-act="style" data-id="${s.id}">${s.id===S.set.styleId?'Active':'Use style'}</button>${s.builtin?'':`<button class="btn danger" data-act="delstyle" data-id="${s.id}">Delete</button>`}</div></div>`).join('')}
+      <div class="lcard form"><h3>New style</h3><input type="text" id="sn" placeholder="Style name" maxlength="40" aria-label="Style name"><textarea id="sp" rows="3" maxlength="1000" placeholder="Describe the look: palette, linework, texture, mood." aria-label="Style prompt"></textarea><button class="btn pri" data-act="newstyle">Save style</button></div></div></div>`;
+},
+templates(){
+  return`<div class="wrap" style="max-width:none">${h1('Templates')}<p class="note">Each template is an ad structure with the shot list and timings filled in. Starting one creates a project you can edit.</p>
+    <div class="lcards">${TPL.map(t=>{const s=t.shots.reduce((a,x)=>a+x[1],0);return`<div class="lcard"><h3>${t.name}<span class="built">${s} seconds</span></h3><p>${t.why}</p>
+      <p style="flex:0">${t.shots.map(x=>`${x[0]} ${x[1]}s`).join(', ')}</p><div class="row"><button class="btn pri" data-act="starttpl" data-id="${t.id}">Start project</button></div></div>`}).join('')}</div></div>`;
+},
+resources(){
+  if(!live)return`<div class="wrap">${h1('Resources')}<div class="card form"><h3>This copy runs in preview mode</h3>
+    <p class="note">Real renders and GPU rentals go through a small server that holds your API keys. A page hosted on claude.ai can’t call Hugging Face or Vast.ai directly. Run the project on your own machine and open it there; this page then shows your engines, GPU offers and running instances.</p>
+    <p class="note">1. Unzip the project. 2. Run pip install -r requirements.txt. 3. Run python server.py. 4. Open http://localhost:8000.</p></div></div>`;
+  const s=R.settings;if(!s)return`<div class="wrap">${h1('Resources')}<div class="empty">Loading your settings…</div></div>`;
+  const inp=(k,l,ph='',type='text')=>`<label class="note">${l}<input type="${type}" data-cfg="${k}" value="${type==='password'?'':esc(s[k]??'')}" placeholder="${esc(ph)}" autocomplete="off"></label>`;
+  const eng=(k,l)=>`<label class="note">${l}<select data-cfg="${k}"><option value="hf"${s[k]==='hf'?' selected':''}>Hugging Face, pay per render</option><option value="comfy"${s[k]==='comfy'?' selected':''}>My rented GPU, pay per hour</option></select></label>`;
+  const off=R.offers,ins=R.instances,burn=(ins||[]).filter(i=>i.actual_status==='running').reduce((a,i)=>a+(i.dph_total||0),0);
+  return`<div class="wrap" style="max-width:none">${h1('Resources',`<button class="btn" data-act="reload">${R.loading?'Loading…':'Refresh'}</button>`)}
+    <div class="row">${pill(health.hf,'Hugging Face '+(health.hf?'ready':'needs a token'))}${pill(health.vast,'Vast.ai '+(health.vast?'ready':'needs a key'))}${pill(health.comfy,health.comfy?'GPU at '+esc(health.comfy):'No GPU connected')}${pill(health.ffmpeg,health.ffmpeg?'ffmpeg ready':'ffmpeg missing')}</div>
+    ${ins&&ins.length?`<div class="card"><div class="sec" style="color:var(--text)">Your instances<span>${burn?'Billing $'+burn.toFixed(3)+' per hour right now':'Nothing is billing compute'}</span></div>
+      ${ins.map(i=>`<div class="lrow"><div><b>${esc((i.num_gpus||1)+'× '+(i.gpu_name||'GPU'))}</b> ${pill(i.actual_status==='running',esc(i.actual_status||'starting'))}${i.active?pill(1,'Used for renders'):''}<br><span class="note">#${i.id}, $${(i.dph_total||0).toFixed(3)}/hr${i.status_msg?', '+esc(String(i.status_msg).slice(0,80)):''}</span></div>
+        <div class="row"><button class="btn pri" data-act="inst" data-do="use" data-id="${i.id}">Use for renders</button><button class="btn" data-act="inst" data-do="${i.actual_status==='running'?'stop':'start'}" data-id="${i.id}">${i.actual_status==='running'?'Stop':'Start'}</button><button class="btn danger" data-act="destroy" data-id="${i.id}">${armed==i.id?'Tap again to destroy':'Destroy'}</button></div></div>`).join('')}
+      <p class="note">Stop pauses compute billing but still charges for disk. Destroy ends all billing and deletes the models on the instance.</p></div>`:''}
+    <div class="card form"><h3>Rent a GPU</h3>
+      <div class="ctrls"><label>GPU<select data-rq="gpu">${['RTX 3090','RTX 4090','RTX 5090','RTX A6000','Any'].map(g=>`<option${R.q.gpu===g?' selected':''}>${g}</option>`).join('')}</select></label>
+        <label>Max $ per hour<input type="number" step="0.05" min="0.05" data-rq="max_price" value="${esc(R.q.max_price)}" style="width:96px"></label>
+        <label>Min VRAM, GB<input type="number" step="1" min="8" data-rq="min_vram" value="${esc(R.q.min_vram)}" style="width:88px"></label>
+        <label>Pricing<select data-rq="spot"><option value="false"${R.q.spot==='false'?' selected':''}>On-demand</option><option value="true"${R.q.spot==='true'?' selected':''}>Interruptible, cheaper</option></select></label>
+        <button class="btn pri" data-act="offers" ${health.vast?'':'disabled'}>${R.loading==='offers'?'Searching…':'Find GPUs'}</button></div>
+      ${health.vast?'':'<p class="note">Save a Vast.ai API key below to search.</p>'}
+      ${off?(off.length?off.map(o=>`<div class="lrow"><div><b>${esc((o.num_gpus||1)+'× '+o.gpu_name)}</b>, ${Math.round((o.gpu_ram||0)/1024)} GB<br><span class="note">$${(o.dph_total||0).toFixed(3)}/hr, value score ${(o.dlperf_per_dphtotal||0).toFixed(0)}, ${Math.round((o.reliability2||0)*100)}% reliable, ${esc(o.geolocation||'')}</span></div>
+        <button class="btn pri" data-act="rent" data-id="${o.id}" data-price="${o.min_bid||''}">Rent</button></div>`).join(''):'<div class="empty">No machines match. Raise the max price or pick Any.</div>'):'<p class="note">Results are sorted by performance per dollar, best value first.</p>'}</div>
+    <div class="card form"><h3>Keys and engines</h3>
+      <div class="fgrid">${inp('hf_token','Hugging Face token'+(s.hf_token_set?' (saved)':''),s.hf_token_set?'Leave blank to keep':'hf_…','password')}${inp('vast_key','Vast.ai API key'+(s.vast_key_set?' (saved)':''),s.vast_key_set?'Leave blank to keep':'','password')}
+      ${eng('engine_image','Images render on')}${eng('engine_edit','Edits render on')}${eng('engine_video','Video renders on')}${eng('engine_voice','Voiceover renders on')}
+      ${inp('hf_provider','Hugging Face provider','auto')}${inp('model_image','Image model')}${inp('model_edit','Edit model')}${inp('model_t2v','Text to video model')}${inp('model_i2v','Image to video model')}${inp('model_voice','Voice model')}${inp('model_chat','Chat mode model')}
+      ${inp('vast_template','Vast template hash (ComfyUI)')}${inp('vast_image','Or Docker image')}${inp('vast_disk','Disk, GB')}${inp('comfy_port','ComfyUI port')}${inp('comfy_url','ComfyUI address','Set by Use for renders')}${inp('auto_stop_min','Stop idle GPU after, minutes')}</div>
+      <div class="row"><button class="btn pri" data-act="savecfg">Save settings</button><span class="note">Workflows found: ${health.workflows.length?esc(health.workflows.join(', ')):'none yet'}. Keys stay on your server.</span></div></div></div>`;
+}};
+function projCard(p){const t=total(p),done=p.shots.filter(s=>M(s.mediaId)).length;return`<div class="lcard"><h3>${esc(p.name)}<span class="built">${t} seconds</span></h3><p>${done} of ${p.shots.length} shots generated</p>
+  <div class="row"><button class="btn pri" data-act="openproj" data-id="${p.id}">Open</button><button class="btn danger" data-act="delproj" data-id="${p.id}">Delete</button></div></div>`}
+
+function render(){
+  document.body.dataset.mode=isMode(S.view)?S.view:'lib';
+  $('rail').innerHTML=NAV.map(([v,l,mode,grp])=>(grp?`<p>${grp}</p>`:'')+`<button class="nav ${mode?'mode':'libn'}" style="--c:var(--${mode?v:'lib'})" data-act="go" data-view="${v}" ${S.view===v?'aria-current="page"':''}>${ico(v)}${l}</button>`).join('');
+  $('stage').innerHTML=(V[S.view]||V.dashboard)();
+  const slots=S.slots.map(M).filter(Boolean),ghost=busy&&!busyShot&&isMode(S.view)&&!(S.view==='create'&&S.set.chat);
+  $('dock').innerHTML=`<h2>Quick slots <span class="note">${slots.length}/6</span></h2>
+    ${slots.length?`<div class="grid">${slots.map(m=>tile(m)).join('')}</div>`:'<div class="empty">Pin references here. Tap any tile below and choose Pin to quick slots.</div>'}
+    <h2>Reference grid <button class="btn" data-act="add">Add files</button></h2>
+    ${S.media.length||ghost?`<div class="grid">${ghost?'<div class="tile ghost">Rendering</div>':''}${S.media.map(m=>tile(m)).join('')}</div>`:'<div class="empty">Your uploads and renders land here.</div>'}`;
+  $('crl').textContent=live?'Engine':'Demo credits';$('cr').textContent=live?(health.comfy?'GPU connected':'Live'):S.credits.toLocaleString();$('crm').style.width=live?'100%':Math.max(0,S.credits/MAXC*100)+'%';
+  if($('proj')!==document.activeElement)$('proj').value=S.project;
+}
+function openMedia(m){
+  const pinned=S.slots.includes(m.id);
+  const view=m.kind==='prompt'?'':m.file&&m.kind==='video'?`<video src="${esc(m.src)}" controls playsinline></video>`:m.file&&m.kind==='audio'?`<audio src="${esc(m.src)}" controls style="width:100%"></audio>`:`<img src="${esc(m.src)}" alt="${esc(m.prompt||'Media')}">`;
+  $('modal').innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Media details">${view}
+    ${m.prompt?`<p>${esc(m.prompt)}</p>`:''}${m.meta?`<p style="font-size:12.5px">${esc(m.meta)}</p>`:''}
+    <div class="row"><button class="btn pri" data-act="pin" data-id="${m.id}">${pinned?'Remove from quick slots':'Pin to quick slots'}</button>
+    ${m.kind==='image'?`<button class="btn" data-act="toedit" data-id="${m.id}">Open in Edit</button>`:''}
+    ${m.prompt?`<button class="btn" data-act="useprompt" data-id="${m.id}">Use prompt</button>`:''}
+    ${m.file?`<a class="btn" href="${esc(m.src)}" download style="text-decoration:none">Download</a>`:''}
+    <button class="btn danger" data-act="del" data-id="${m.id}">Delete</button><button class="btn" data-act="close">Close</button></div></div>`;
+}
+const closeModal=()=>{$('modal').innerHTML=''};
+const curProj=()=>S.projects.find(x=>x.id===S.selProj);
+
+/* ---------- events ---------- */
+const A={
+  go(d){S.view=d.view;if(isMode(d.view))S.lastMode=d.view;if(d.view==='projects')S.selProj='';save();render();window.scrollTo(0,0);if(d.view==='resources')loadRes();if(d.view==='dashboard')loadStats()},
+  gen(d){generate(d.kind)},
+  tog(d){S.set[d.key]=!S.set[d.key];save();render()},
+  chat(){sendChat()}, clearchat(){chat=[];render()},
+  usechat(d){P.create=chat[d.i].text;S.set.chat=false;save();render();toast('Prompt ready. Tap Generate.')},
+  savechat(d){S.media.unshift({id:uid(),kind:'prompt',prompt:chat[d.i].text,meta:'Saved prompt'});save();render();toast('Prompt saved to your reference grid')},
+  add(){$('file').click()},
+  open(d){const m=M(d.id);if(m)openMedia(m)}, close:closeModal,
+  pin(d){const i=S.slots.indexOf(d.id);if(i>=0)S.slots.splice(i,1);else if(S.slots.length>=6){toast('Quick slots are full. Remove one first.');return}else S.slots.push(d.id);save();closeModal();render()},
+  toedit(d){S.editId=d.id;S.view='edit';S.lastMode='edit';save();closeModal();render();window.scrollTo(0,0)},
+  useprompt(d){const m=M(d.id),k=isMode(S.view)?S.view:'create';P[k]=m.prompt;if(!isMode(S.view))S.view='create';S.set.chat=false;closeModal();render();toast('Prompt loaded')},
+  del(d){S.media=S.media.filter(m=>m.id!==d.id);S.slots=S.slots.filter(i=>i!==d.id);S.chars.forEach(c=>c.refs=c.refs.filter(i=>i!==d.id));if(S.editId===d.id)S.editId='';save();closeModal();render();toast('Deleted')},
+  mf(d){S.mfilter=d.f;render()},
+  preset(d){const p=S.presets.find(x=>x.id===d.id);if(!p)return;P.edit=(P.edit.trim()?P.edit.trim()+' ':'')+p.prompt;S.view='edit';save();render();toast(p.name+' added to your prompt')},
+  newpreset(){const n=$('pn').value.trim(),p=$('pp').value.trim();if(!n||!p){toast('Give the preset a name and a prompt');return}S.presets.push({id:uid(),name:n,prompt:p});save();render();toast('Preset saved')},
+  delpreset(d){S.presets=S.presets.filter(p=>p.id!==d.id);save();render()},
+  style(d){S.set.styleId=d.id;save();render()},
+  newstyle(){const n=$('sn').value.trim(),p=$('sp').value.trim();if(!n||!p){toast('Give the style a name and a description');return}const s={id:uid(),name:n,prompt:p};S.styles.push(s);S.set.styleId=s.id;save();render();toast('Style saved')},
+  delstyle(d){S.styles=S.styles.filter(s=>s.id!==d.id);if(S.set.styleId===d.id)S.set.styleId='none';save();render()},
+  newchar(){const c={id:uid(),name:'Character '+(S.chars.length+1),desc:'',refs:[]};S.chars.push(c);S.selChar=c.id;save();render()},
+  selchar(d){S.selChar=d.id;render()},
+  addref(d){const c=S.chars.find(x=>x.id===S.selChar);if(!c)return;if(c.refs.includes(d.id)){toast('Already a reference');return}if(c.refs.length>=3){toast('Three references max. Tap one to remove it.');return}c.refs.push(d.id);save();render()},
+  unref(d){const c=S.chars.find(x=>x.id===S.selChar);if(c){c.refs.splice(+d.i,1);save();render()}},
+  usechar(){S.set.charOn=true;S.set.charId=S.selChar;S.view='create';save();render();toast('Character on')},
+  delchar(){S.chars=S.chars.filter(c=>c.id!==S.selChar);if(S.set.charId===S.selChar){S.set.charId='';S.set.charOn=false}S.selChar='';save();render()},
+  newel(){const n=$('en').value.trim(),d=$('ed').value.trim();if(!n||!d){toast('Give the element a name and a description');return}const s=firstSlot('image');S.elements.push({id:uid(),name:n,type:$('et').value,desc:d,mediaId:s?s.id:''});save();render();toast('Element saved')},
+  elimg(d){const e=S.elements.find(x=>x.id===d.id),s=firstSlot('image');if(!s){toast('Pin an image to quick slots first');return}e.mediaId=s.id;save();render()},
+  useel(d){const e=S.elements.find(x=>x.id===d.id),k=S.lastMode==='sound'?'create':S.lastMode;P[k]=(P[k].trim()?P[k].trim()+' ':'')+e.name+': '+e.desc;
+    if(e.mediaId&&M(e.mediaId)&&!S.slots.includes(e.mediaId)&&S.slots.length<6)S.slots.push(e.mediaId);S.view=k;S.set.chat=false;save();render();toast(e.name+' added to your prompt')},
+  delel(d){S.elements=S.elements.filter(e=>e.id!==d.id);save();render()},
+  starttpl(d){const t=TPL.find(x=>x.id===d.id),p={id:uid(),name:t.name+' ad',shots:t.shots.map(([label,sec,prompt])=>({id:uid(),label,sec,prompt,mediaId:''}))};S.projects.unshift(p);S.selProj=p.id;S.view='projects';save();render();window.scrollTo(0,0)},
+  openproj(d){S.selProj=d.id;S.view='projects';save();render();window.scrollTo(0,0)},
+  closeproj(){S.selProj='';render()},
+  delproj(d){S.projects=S.projects.filter(p=>p.id!==d.id);save();render()},
+  addshot(){curProj().shots.push({id:uid(),label:'New shot',sec:4,prompt:'',mediaId:''});save();render()},
+  delshot(d){const p=curProj();p.shots=p.shots.filter(s=>s.id!==d.id);save();render()},
+  slotshot(d){const s=curProj().shots.find(x=>x.id===d.id),m=S.slots.map(M).find(x=>x&&(x.kind==='video'||x.kind==='image'));if(!m){toast('Pin a clip or image to quick slots first');return}s.mediaId=m.id;save();render()},
+  genshot(d){const s=curProj().shots.find(x=>x.id===d.id);generate('video',{prompt:s.prompt,shot:s,seconds:Math.max(5,Math.ceil(s.sec))})},
+  async stitch(){const p=curProj(),shots=p.shots.map(s=>({m:M(s.mediaId),s})).filter(x=>x.m&&x.m.file).map(x=>({file:x.m.file,seconds:+x.s.sec||4})),aud=firstSlot('audio');
+    busy=true;busyShot='stitch';render();
+    try{const m=await api('/stitch',{method:'POST',body:{shots,ratio:S.set.ratio,audio:aud&&aud.file?aud.file:'',name:p.name}});S.media.unshift(m);busy=false;busyShot='';save();render();openMedia(m)}
+    catch(e){busy=false;busyShot='';render();fail(e)}},
+  credits(){if(live){A.go({view:'resources'});return}$('modal').innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Demo credits"><h2>Demo credits</h2><p>${S.credits.toLocaleString()} of ${MAXC.toLocaleString()} left. They only meter preview frames. Once the server is connected, this box shows your engine instead and real costs appear on the Dashboard.</p><div class="row"><button class="btn pri" data-act="refill">Refill credits</button><button class="btn" data-act="close">Close</button></div></div>`},
+  refill(){S.credits=MAXC;save();closeModal();render();toast('Credits refilled')},
+  reload(){loadRes()}, offers(){loadRes('offers')},
+  async savecfg(){const body={};document.querySelectorAll('[data-cfg]').forEach(el=>{body[el.dataset.cfg]=el.value.trim()});
+    try{R.settings=await api('/settings',{method:'POST',body});health=await api('/health');render();toast('Settings saved')}catch(e){fail(e)}},
+  async rent(d){try{const r=await api('/vast/rent',{method:'POST',body:{offer_id:+d.id,price:R.q.spot==='true'&&d.price?+d.price*1.1:null}});toast('Rented. Instance '+(r.new_contract||'')+' is starting; it takes a few minutes.',6000);R.offers=null;loadRes('instances')}catch(e){fail(e)}},
+  async inst(d){try{const r=await api(`/vast/instances/${d.id}/${d.do}`,{method:'POST'});toast(d.do==='use'?'Renders now go to '+r.comfy_url:d.do==='stop'?'Stopping the instance':'Starting the instance',4000);loadRes()}catch(e){fail(e)}},
+  async destroy(d){if(armed!=d.id){armed=d.id;render();setTimeout(()=>{if(armed==d.id){armed='';if(S.view==='resources')render()}},4000);return}armed='';
+    try{await api('/vast/instances/'+d.id,{method:'DELETE'});toast('Instance destroyed');loadRes()}catch(e){fail(e)}}
+};
+document.addEventListener('click',e=>{
+  if(e.target.id==='modal'){closeModal();return}
+  const b=e.target.closest('[data-act]');if(b&&!b.disabled&&A[b.dataset.act])A[b.dataset.act](b.dataset);
+});
+document.addEventListener('input',e=>{const t=e.target,d=t.dataset;
+  if(d.p)P[d.p]=t.value;
+  else if(d.char){const c=S.chars.find(x=>x.id===S.selChar);if(c){c[d.char]=t.value;save()}}
+  else if(d.shot){const s=curProj()&&curProj().shots.find(x=>x.id===d.shot);if(s){s[d.f]=d.f==='sec'?Math.max(1,Math.min(10,parseFloat(t.value)||1)):t.value;save()}}
+  else if(d.proj){const p=curProj();if(p){p.name=t.value;save()}}
+  else if(d.rq)R.q[d.rq]=t.value;
+  else if(t.id==='proj'){S.project=t.value;save()}
+});
+document.addEventListener('change',e=>{const t=e.target,d=t.dataset;
+  if(d.set){S.set[d.set]=t.value;save();render()}
+  else if(d.char==='name'||d.f==='sec')render();
+  else if(t.id==='file'){addFiles([...t.files]);t.value=''}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeModal();
+  if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='chatin'){e.preventDefault();sendChat()}
+});
+render();
+(async()=>{ // connect to the self-hosted server when this page is served by it
+  try{const c=new AbortController();setTimeout(()=>c.abort(),2500);const r=await fetch('/api/health',{signal:c.signal});const h=await r.json();
+    if(r.ok&&h.app==='fitzlabs'){health=h;live=true;adopt(await api('/state'));render();loadStats();if(S.view==='resources')loadRes()}}catch(e){}
+})();
+if(window.claude&&typeof window.claude.use==='function'){
+  Promise.resolve(window.claude.use('sample')).then(s=>{if(s){sample=s;render()}}).catch(()=>{});
+}
+</script>
+</body>
+</html>
